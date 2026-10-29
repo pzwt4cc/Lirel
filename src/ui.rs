@@ -1,6 +1,6 @@
 use eframe::egui;
 
-struct App {
+pub struct App {
     // Здесь можно добавить состояния приложения
 }
 
