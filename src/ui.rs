@@ -24,7 +24,7 @@ impl eframe::App for App {
             ui.heading("Функции:");
             ui.label("1. Конвертация видео в аудио");
 
-            ui.text_edit_single(&mut self.input_path, "Введите путь к файлу");
+            ui.text_edit_singleline(&mut self.input_path);
 
             if ui.button("Конвертировать видео в аудио").clicked() {
                 if !self.input_path.is_empty() {
@@ -41,7 +41,9 @@ impl eframe::App for App {
             ui.label(&self.status_text);
         });
     }
+}
 
+impl App {
     fn convert_video_to_audio(&self, input_path: &str) -> Result<(), std::io::Error> {
         let output_path = "output.mp3"; // Замените на путь к выходному аудио файлу
 
