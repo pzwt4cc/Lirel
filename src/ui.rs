@@ -4,7 +4,7 @@ use std::process::Command;
 
 pub struct App {
     input_path: String,
-    output_format: String,
+    output_format: &'static str,
     default_save_path: String,
     status_text: String,
 }
@@ -13,7 +13,7 @@ impl Default for App {
     fn default() -> Self {
         App {
             input_path: String::new(),
-            output_format: "MP3".to_string(),
+            output_format: "MP3",
             default_save_path: String::new(),
             status_text: String::new(),
         }
@@ -52,7 +52,7 @@ impl eframe::App for App {
 
             ui.label("Формат конвертации:");
             egui::ComboBox::from_label("Формат")
-                .selected_text(&self.output_format)
+                .selected_text(self.output_format)
                 .show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.output_format, "MP3", "MP3");
                     ui.selectable_value(&mut self.output_format, "WAV", "WAV");
@@ -63,7 +63,7 @@ impl eframe::App for App {
 
             if ui.button("Конвертировать").clicked() {
                 if !self.input_path.is_empty() {
-                    if let Err(e) = self.convert_video_to_audio(&self.input_path, &self.output_format, &self.default_save_path) {
+                    if let Err(e) = self.convert_video_to_audio(&self.input_path, self.output_format, &self.default_save_path) {
                         self.status_text = format!("Ошибка: {}", e);
                     } else {
                         self.status_text = "Конвертация успешно выполнена!".to_string();
