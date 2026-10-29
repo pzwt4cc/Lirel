@@ -1,13 +1,17 @@
 use eframe::egui;
-use ffmpeg_cli_rs::{FFmpeg, FFmpegError};
+use std::process::Command;
 
 pub struct App {
-    // Здесь можно добавить состояния приложения
+    input_path: String,
+    status_text: String,
 }
 
 impl Default for App {
     fn default() -> Self {
-        App {}
+        App {
+            input_path: String::new(),
+            status_text: String::new(),
+        }
     }
 }
 
@@ -20,22 +24,36 @@ impl eframe::App for App {
             ui.heading("Функции:");
             ui.label("1. Конвертация видео в аудио");
 
-            // Добавляем кнопку для запуска конвертации
+            ui.text_edit_single(&mut self.input_path, "Введите путь к файлу");
+
             if ui.button("Конвертировать видео в аудио").clicked() {
-                if let Err(e) = self.convert_video_to_audio() {
-                    ui.label(format!("Ошибка: {}", e));
+                if !self.input_path.is_empty() {
+                    if let Err(e) = self.convert_video_to_audio(&self.input_path) {
+                        self.status_text = format!("Ошибка: {}", e);
+                    } else {
+                        self.status_text = "Конвертация успешно выполнена!".to_string();
+                    }
                 } else {
-                    ui.label("Конвертация успешно выполнена!");
+                    self.status_text = "Путь к файлу не указан".to_string();
                 }
             }
+
+            ui.label(&self.status_text);
         });
     }
 
-    fn convert_video_to_audio(&self) -> Result<(), FFmpegError> {
-        let ffmpeg = FFmpeg::new();
-        ffmpeg
-            .input("input.mp4") // Замените на путь к вашему видео файлу
-            .output("output.mp3") // Замените на путь к выходному аудио файлу
-            .run()
+    fn convert_video_to_audio(&self, input_path: &str) -> Result<(), std::io::Error> {
+        let output_path = "output.mp3"; // Замените на путь к выходному аудио файлу
+
+        let status = Command::new("ffmpeg")
+            .args(&["-i", input_path, output_path])
+            .status()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("Ошибка запуска ffmpeg: {}", e)))?;
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "FFmpeg завершился с ошибкой"))
+        }
     }
 }
