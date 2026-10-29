@@ -6,3 +6,4 @@ edition = "2018"
 [dependencies]
 eframe = "0.25"
 egui = "0.17"
+rfd = "0.10"

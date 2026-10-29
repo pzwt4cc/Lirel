@@ -1,4 +1,5 @@
 use eframe::egui;
+use rfd;
 use std::process::Command;
 
 pub struct App {
@@ -23,6 +24,12 @@ impl eframe::App for App {
             ui.separator();
             ui.heading("Функции:");
             ui.label("1. Конвертация видео в аудио");
+
+            if ui.button("Выбрать файл").clicked() {
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    self.input_path = path.display().to_string();
+                }
+            }
 
             ui.text_edit_singleline(&mut self.input_path);
 
