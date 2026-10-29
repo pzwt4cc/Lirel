@@ -15,6 +15,9 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Lirel");
             ui.label("Привет! Это базовый интерфейс для вашего проекта.");
+            ui.separator();
+            ui.heading("Функции:");
+            ui.label("1. Конвертация видео в аудио");
             // Здесь можно добавить другие элементы интерфейса
         });
     }
