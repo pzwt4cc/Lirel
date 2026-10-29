@@ -51,7 +51,15 @@ impl eframe::App for App {
             }
 
             ui.label("Формат конвертации:");
-            ui.combo(&mut self.output_format, ["MP3", "WAV", "FLAC", "OGG", "AAC"], |ui, format| ui.selectable_value(&mut self.output_format, format.to_string(), format));
+            egui::ComboBox::from_label("Формат")
+                .selected_text(&self.output_format)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.output_format, "MP3", "MP3");
+                    ui.selectable_value(&mut self.output_format, "WAV", "WAV");
+                    ui.selectable_value(&mut self.output_format, "FLAC", "FLAC");
+                    ui.selectable_value(&mut self.output_format, "OGG", "OGG");
+                    ui.selectable_value(&mut self.output_format, "AAC", "AAC");
+                });
 
             if ui.button("Конвертировать").clicked() {
                 if !self.input_path.is_empty() {
