@@ -1,8 +1,3 @@
-//! Описание всех конверторов: форматы, настройки и аргументы ffmpeg.
-//! Чтобы добавить новый конвертор: вариант в `Tool`, запись в `ALL`
-//! и ветки в `title`, `tile`, `formats`, `options`, `input_exts`, `plan`.
-
-/// Текст на двух языках: (русский, английский).
 pub type L = (&'static str, &'static str);
 
 pub struct Opt {
@@ -13,11 +8,11 @@ pub struct Opt {
 
 pub struct Plan {
     pub ext: &'static str,
-    /// Аргументы между входным и выходным файлом.
+
     pub args: Vec<String>,
-    /// Если результат ограничен по длительности (секунды).
+
     pub limit: Option<f64>,
-    /// Результат — один кадр: если ffmpeg ни одного не выдал, это ошибка.
+
     pub needs_frame: bool,
 }
 
@@ -32,11 +27,12 @@ pub enum Tool {
     VideoPhoto = 6,
 }
 
-// ---------- расширения входных файлов ----------
 const VIDEO_EXT: &[&str] = &[
     "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "ts", "3gp",
 ];
-const AUDIO_EXT: &[&str] = &["mp3", "wav", "flac", "ogg", "m4a", "opus", "aac", "wma", "aiff"];
+const AUDIO_EXT: &[&str] = &[
+    "mp3", "wav", "flac", "ogg", "m4a", "opus", "aac", "wma", "aiff",
+];
 const ALL_MEDIA_EXT: &[&str] = &[
     "mp4", "mkv", "avi", "mov", "webm", "flv", "wmv", "m4v", "mpg", "mpeg", "ts", "3gp", "mp3",
     "wav", "flac", "ogg", "m4a", "opus", "aac", "wma", "aiff",
@@ -46,15 +42,15 @@ const PHOTO_EXT: &[&str] = &[
     "pgm", "pcx", "svg", "psd", "heic", "heif",
 ];
 
-// ---------- форматы ----------
 const AUDIO_FORMATS: &[&str] = &["MP3", "WAV", "FLAC", "OGG", "AAC", "OPUS"];
-const PHOTO_FORMATS: &[&str] = &["JPG", "PNG", "WEBP", "AVIF", "JXL", "GIF", "BMP", "TIFF", "ICO"];
+const PHOTO_FORMATS: &[&str] = &[
+    "JPG", "PNG", "WEBP", "AVIF", "JXL", "GIF", "BMP", "TIFF", "ICO",
+];
 const FRAME_FORMATS: &[&str] = &["JPG", "PNG", "WEBP"];
 const VIDEO_FORMATS: &[&str] = &["MP4", "MKV", "WEBM", "MOV", "AVI"];
 const GIF_FORMATS: &[&str] = &["GIF", "WEBP"];
 const COMPRESS_FORMATS: &[&str] = &["MP4 (H.264)", "MP4 (H.265)", "WEBM"];
 
-// ---------- настройки ----------
 const KBPS: [u32; 5] = [96, 128, 192, 256, 320];
 
 const O_BITRATE: Opt = Opt {
@@ -70,12 +66,20 @@ const O_BITRATE: Opt = Opt {
 };
 const O_RATE: Opt = Opt {
     title: ("Частота дискретизации", "Sample rate"),
-    choices: &[("Как в оригинале", "Original"), ("44.1 кГц", "44.1 kHz"), ("48 кГц", "48 kHz")],
+    choices: &[
+        ("Как в оригинале", "Original"),
+        ("44.1 кГц", "44.1 kHz"),
+        ("48 кГц", "48 kHz"),
+    ],
     default: 0,
 };
 const O_CHANNELS: Opt = Opt {
     title: ("Каналы", "Channels"),
-    choices: &[("Как в оригинале", "Original"), ("Моно", "Mono"), ("Стерео", "Stereo")],
+    choices: &[
+        ("Как в оригинале", "Original"),
+        ("Моно", "Mono"),
+        ("Стерео", "Stereo"),
+    ],
     default: 0,
 };
 const O_PHOTO_QUALITY: Opt = Opt {
@@ -100,7 +104,11 @@ const O_PHOTO_SIZE: Opt = Opt {
 };
 const O_VIDEO_QUALITY: Opt = Opt {
     title: ("Качество", "Quality"),
-    choices: &[("Высокое", "High"), ("Среднее", "Medium"), ("Низкое", "Low")],
+    choices: &[
+        ("Высокое", "High"),
+        ("Среднее", "Medium"),
+        ("Низкое", "Low"),
+    ],
     default: 0,
 };
 const O_RESOLUTION: Opt = Opt {
@@ -175,7 +183,6 @@ const GIF_OPTS: &[Opt] = &[O_GIF_FPS, O_GIF_WIDTH, O_GIF_LEN];
 const COMPRESS_OPTS: &[Opt] = &[O_COMPRESS_LEVEL, O_RESOLUTION, O_SOUND];
 const FRAME_OPTS: &[Opt] = &[O_FRAME_AT, O_PHOTO_QUALITY];
 
-/// Разделы на главном экране.
 pub const CATEGORIES: [L; 3] = [("Фото", "Photos"), ("Видео", "Video"), ("Аудио", "Audio")];
 
 fn s(v: &[&str]) -> Vec<String> {
@@ -198,10 +205,12 @@ impl Tool {
     ];
 
     pub fn from_index(i: i32) -> Tool {
-        Self::ALL.get(i.max(0) as usize).copied().unwrap_or(Tool::VideoAudio)
+        Self::ALL
+            .get(i.max(0) as usize)
+            .copied()
+            .unwrap_or(Tool::VideoAudio)
     }
 
-    /// Индекс раздела в `CATEGORIES`.
     pub fn category(self) -> usize {
         match self {
             Tool::Photo | Tool::VideoPhoto => 0,
@@ -222,7 +231,6 @@ impl Tool {
         }
     }
 
-    /// Подпись на плитке: «из» и «во что».
     pub fn tile(self) -> (&'static str, &'static str) {
         match self {
             Tool::VideoAudio => ("MP4", "MP3"),
@@ -267,7 +275,6 @@ impl Tool {
         }
     }
 
-    /// `fmt` — индекс формата, `o` — выбранные пункты по каждой группе настроек.
     pub fn plan(self, fmt: usize, o: &[usize]) -> Plan {
         match self {
             Tool::VideoAudio => audio_plan(fmt, pick(o, 0, 2), 0, 0),
@@ -294,7 +301,7 @@ fn audio_plan(fmt: usize, bitrate: usize, rate: usize, channels: usize) -> Plan 
     };
     let mut args = s(&["-vn"]);
     args.extend(codec);
-    // libopus сам работает только с 48 кГц и кратными, поэтому частоту для него не трогаем
+
     if ext != "opus" {
         match rate {
             1 => args.extend(s(&["-ar", "44100"])),
@@ -307,16 +314,23 @@ fn audio_plan(fmt: usize, bitrate: usize, rate: usize, channels: usize) -> Plan 
         2 => args.extend(s(&["-ac", "2"])),
         _ => {}
     }
-    Plan { ext, args, limit: None, needs_frame: false }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: false,
+    }
 }
 
-/// Кодек и расширение для картинки. `kind` — название формата из списков выше.
 fn image_codec(kind: &str, q: usize) -> (&'static str, Vec<String>) {
     let q = q.min(3);
     match kind {
         "JPG" => {
             let v = ["2", "4", "8", "15"][q];
-            ("jpg", s(&["-c:v", "mjpeg", "-pix_fmt", "yuvj420p", "-q:v", v]))
+            (
+                "jpg",
+                s(&["-c:v", "mjpeg", "-pix_fmt", "yuvj420p", "-q:v", v]),
+            )
         }
         "PNG" => ("png", s(&["-c:v", "png"])),
         "WEBP" => {
@@ -327,7 +341,18 @@ fn image_codec(kind: &str, q: usize) -> (&'static str, Vec<String>) {
             let v = ["18", "26", "34", "42"][q];
             (
                 "avif",
-                s(&["-c:v", "libaom-av1", "-crf", v, "-b:v", "0", "-cpu-used", "6", "-pix_fmt", "yuv420p"]),
+                s(&[
+                    "-c:v",
+                    "libaom-av1",
+                    "-crf",
+                    v,
+                    "-b:v",
+                    "0",
+                    "-cpu-used",
+                    "6",
+                    "-pix_fmt",
+                    "yuv420p",
+                ]),
             )
         }
         "JXL" => {
@@ -347,15 +372,20 @@ fn photo_plan(fmt: usize, quality: usize, size: usize) -> Plan {
 
     if size > 0 {
         let factor = [1.0, 0.75, 0.5, 0.25][size.min(3)];
-        filters.push(format!("scale=trunc(iw*{factor}/2)*2:trunc(ih*{factor}/2)*2"));
+        filters.push(format!(
+            "scale=trunc(iw*{factor}/2)*2:trunc(ih*{factor}/2)*2"
+        ));
     }
     if kind == "ICO" {
-        // иконки бывают не больше 256×256, PNG внутри ICO должен быть RGBA
-        filters.push("scale=min(256\\,iw):min(256\\,ih):force_original_aspect_ratio=decrease,format=rgba".into());
+        filters.push(
+            "scale=min(256\\,iw):min(256\\,ih):force_original_aspect_ratio=decrease,format=rgba"
+                .into(),
+        );
     }
     if kind == "JPG" {
-        // JPEG без прозрачности: подкладываем белый фон вместо чёрного
-        filters.push("split=2[bg][fg];[bg]drawbox=c=white:t=fill[bgw];[bgw][fg]overlay=format=auto".into());
+        filters.push(
+            "split=2[bg][fg];[bg]drawbox=c=white:t=fill[bgw];[bgw][fg]overlay=format=auto".into(),
+        );
     }
 
     let mut args = s(&["-frames:v", "1"]);
@@ -364,7 +394,12 @@ fn photo_plan(fmt: usize, quality: usize, size: usize) -> Plan {
     }
     let (ext, codec) = image_codec(kind, quality);
     args.extend(codec);
-    Plan { ext, args, limit: None, needs_frame: false }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: false,
+    }
 }
 
 fn frame_plan(fmt: usize, moment: usize, quality: usize) -> Plan {
@@ -373,12 +408,17 @@ fn frame_plan(fmt: usize, moment: usize, quality: usize) -> Plan {
     let mut args = s(&["-ss", at, "-frames:v", "1"]);
     let (ext, codec) = image_codec(kind, quality);
     args.extend(codec);
-    Plan { ext, args, limit: None, needs_frame: true }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: true,
+    }
 }
 
 fn height_filter(res: usize) -> Option<String> {
     let h = [0, 1080, 720, 480][res.min(3)];
-    // `\,` — экранированная запятая внутри выражения фильтра
+
     (h > 0).then(|| format!("scale=-2:min({h}\\,ih)"))
 }
 
@@ -391,7 +431,9 @@ fn video_plan(fmt: usize, quality: usize, res: usize, mute: bool) -> Plan {
     let (ext, codec): (&'static str, Vec<String>) = match fmt {
         0 | 1 | 3 => {
             let crf = ["20", "24", "29"][q];
-            let mut c = s(&["-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p"]);
+            let mut c = s(&[
+                "-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p",
+            ]);
             let ext = match fmt {
                 0 => {
                     c.extend(s(&["-movflags", "+faststart"]));
@@ -407,7 +449,18 @@ fn video_plan(fmt: usize, quality: usize, res: usize, mute: bool) -> Plan {
         }
         2 => {
             let crf = ["30", "36", "42"][q];
-            let mut c = s(&["-c:v", "libvpx-vp9", "-crf", crf, "-b:v", "0", "-row-mt", "1", "-cpu-used", "4"]);
+            let mut c = s(&[
+                "-c:v",
+                "libvpx-vp9",
+                "-crf",
+                crf,
+                "-b:v",
+                "0",
+                "-row-mt",
+                "1",
+                "-cpu-used",
+                "4",
+            ]);
             if !mute {
                 c.extend(s(&["-c:a", "libopus", "-b:a", "128k"]));
             }
@@ -426,14 +479,18 @@ fn video_plan(fmt: usize, quality: usize, res: usize, mute: bool) -> Plan {
     if mute {
         args.push("-an".into());
     }
-    Plan { ext, args, limit: None, needs_frame: false }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: false,
+    }
 }
 
 fn gif_plan(fmt: usize, fps: usize, width: usize, len: usize) -> Plan {
     let fps = [10, 15, 24][fps.min(2)];
     let mut filters = format!("fps={fps}");
     if let Some(w) = [Some(320), Some(480), Some(640), None][width.min(3)] {
-        // `min(w, iw)` — не растягиваем маленькие ролики
         filters.push_str(&format!(",scale=min({w}\\,iw):-2:flags=lanczos"));
     }
     let mut args = s(&["-an"]);
@@ -451,7 +508,12 @@ fn gif_plan(fmt: usize, fps: usize, width: usize, len: usize) -> Plan {
     if let Some(l) = limit {
         args.extend(["-t".to_string(), format!("{l}")]);
     }
-    Plan { ext, args, limit, needs_frame: false }
+    Plan {
+        ext,
+        args,
+        limit,
+        needs_frame: false,
+    }
 }
 
 fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
@@ -463,7 +525,18 @@ fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
     let (ext, codec): (&'static str, Vec<String>) = match fmt {
         0 => {
             let crf = ["23", "27", "31", "35"][l];
-            let mut c = s(&["-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p", "-movflags", "+faststart"]);
+            let mut c = s(&[
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                crf,
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+            ]);
             if !mute {
                 c.extend(s(&["-c:a", "aac", "-b:a", "96k"]));
             }
@@ -471,7 +544,20 @@ fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
         }
         1 => {
             let crf = ["26", "30", "34", "38"][l];
-            let mut c = s(&["-c:v", "libx265", "-preset", "medium", "-crf", crf, "-tag:v", "hvc1", "-pix_fmt", "yuv420p", "-movflags", "+faststart"]);
+            let mut c = s(&[
+                "-c:v",
+                "libx265",
+                "-preset",
+                "medium",
+                "-crf",
+                crf,
+                "-tag:v",
+                "hvc1",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+            ]);
             if !mute {
                 c.extend(s(&["-c:a", "aac", "-b:a", "96k"]));
             }
@@ -479,7 +565,18 @@ fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
         }
         _ => {
             let crf = ["32", "37", "42", "47"][l];
-            let mut c = s(&["-c:v", "libvpx-vp9", "-crf", crf, "-b:v", "0", "-row-mt", "1", "-cpu-used", "4"]);
+            let mut c = s(&[
+                "-c:v",
+                "libvpx-vp9",
+                "-crf",
+                crf,
+                "-b:v",
+                "0",
+                "-row-mt",
+                "1",
+                "-cpu-used",
+                "4",
+            ]);
             if !mute {
                 c.extend(s(&["-c:a", "libopus", "-b:a", "64k"]));
             }
@@ -490,5 +587,10 @@ fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
     if mute {
         args.push("-an".into());
     }
-    Plan { ext, args, limit: None, needs_frame: false }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: false,
+    }
 }

@@ -1,9 +1,9 @@
-use super::tools::Plan;
+use super::{ffmpeg, tools::Plan};
 use std::{
     fs,
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
     sync::atomic::{AtomicBool, Ordering},
     thread,
 };
@@ -15,23 +15,6 @@ pub enum ConvertError {
     Failed(String),
 }
 
-fn probe_duration(input: &Path) -> Option<f64> {
-    let out = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(input)
-        .output()
-        .ok()?;
-    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
-}
-
-/// Не затираем существующие файлы: song.mp3 -> song (1).mp3 -> ...
 fn unique_output(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     let mut path = dir.join(format!("{stem}.{ext}"));
     let mut n = 1;
@@ -42,8 +25,6 @@ fn unique_output(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     path
 }
 
-/// Запускает ffmpeg по плану. Блокирующая функция: вызывать из отдельного потока.
-/// `on_progress` получает 0.0..=1.0, `cancel` позволяет прервать работу.
 pub fn run(
     input: &Path,
     out_dir: &Path,
@@ -53,11 +34,14 @@ pub fn run(
 ) -> Result<PathBuf, ConvertError> {
     fs::create_dir_all(out_dir).map_err(|e| ConvertError::Failed(e.to_string()))?;
 
-    let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+    let stem = input
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
     let output = unique_output(out_dir, stem, plan.ext);
-    let total = probe_duration(input).map(|d| plan.limit.map_or(d, |l| d.min(l)));
+    let total = ffmpeg::probe_duration(input).map(|d| plan.limit.map_or(d, |l| d.min(l)));
 
-    let mut child = Command::new("ffmpeg")
+    let mut child = ffmpeg::command()
         .args([
             "-hide_banner",
             "-loglevel",
@@ -86,7 +70,6 @@ pub fn run(
     let stdout = child.stdout.take().expect("stdout piped");
     let mut stderr = child.stderr.take().expect("stderr piped");
 
-    // stderr читаем параллельно, чтобы ffmpeg не завис на заполненном буфере
     let stderr_thread = thread::spawn(move || {
         let mut text = String::new();
         let _ = stderr.read_to_string(&mut text);
@@ -127,7 +110,9 @@ pub fn run(
         Ok(output)
     } else if status.success() {
         let _ = fs::remove_file(&output);
-        Err(ConvertError::Failed("nothing was produced (time beyond video length?)".into()))
+        Err(ConvertError::Failed(
+            "nothing was produced (time beyond video length?)".into(),
+        ))
     } else {
         let _ = fs::remove_file(&output);
         Err(ConvertError::Failed(err_text.trim().to_string()))

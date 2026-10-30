@@ -17,8 +17,6 @@ use std::{
     thread,
 };
 
-// ---------- помощники ----------
-
 fn lt(lang: i32, l: L) -> SharedString {
     SharedString::from(if lang == 0 { l.0 } else { l.1 })
 }
@@ -31,7 +29,11 @@ fn human_size(bytes: u64) -> String {
         v /= 1024.0;
         i += 1;
     }
-    if i == 0 { format!("{bytes} B") } else { format!("{v:.1} {}", UNITS[i]) }
+    if i == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{v:.1} {}", UNITS[i])
+    }
 }
 
 fn make_item(path: &Path) -> FileItem {
@@ -46,7 +48,9 @@ fn make_item(path: &Path) -> FileItem {
         .chars()
         .take(4)
         .collect();
-    let size = fs::metadata(path).map(|m| human_size(m.len())).unwrap_or_default();
+    let size = fs::metadata(path)
+        .map(|m| human_size(m.len()))
+        .unwrap_or_default();
 
     FileItem {
         name: name.into(),
@@ -59,13 +63,11 @@ fn make_item(path: &Path) -> FileItem {
     }
 }
 
-/// Доступ к VecModel со списком файлов (только из потока интерфейса).
 fn with_files<R>(ui: &AppWindow, f: impl FnOnce(&VecModel<FileItem>) -> R) -> Option<R> {
     let model = ui.global::<AppState>().get_files();
     model.as_any().downcast_ref::<VecModel<FileItem>>().map(f)
 }
 
-/// Обновить одну строку списка из любого потока.
 fn update_row(weak: &Weak<AppWindow>, i: usize, f: impl FnOnce(&mut FileItem) + Send + 'static) {
     let _ = weak.upgrade_in_event_loop(move |ui| {
         with_files(&ui, |m| {
@@ -77,20 +79,21 @@ fn update_row(weak: &Weak<AppWindow>, i: usize, f: impl FnOnce(&mut FileItem) + 
     });
 }
 
-/// Подпись в большой карточке: имя файла / «Выбрано: N файлов».
 fn refresh_summary(ui: &AppWindow) {
     let st = ui.global::<AppState>();
     let lang = st.get_language();
     let files = st.get_files();
     let text = match files.row_count() {
         0 => i18n::summary_none(lang),
-        1 => files.row_data(0).map(|f| f.name.to_string()).unwrap_or_default(),
+        1 => files
+            .row_data(0)
+            .map(|f| f.name.to_string())
+            .unwrap_or_default(),
         n => i18n::summary_many(lang, n),
     };
     st.set_summary(text.into());
 }
 
-/// Главная: разделы (Фото / Видео / Аудио) с плитками. Пересобирается при смене языка.
 fn refresh_tiles(ui: &AppWindow) {
     let st = ui.global::<AppState>();
     let lang = st.get_language();
@@ -123,8 +126,6 @@ fn refresh_tiles(ui: &AppWindow) {
     st.set_categories(ModelRc::new(VecModel::from(categories)));
 }
 
-/// Загрузить форматы и настройки конвертора на экран.
-/// `reset = true` — сбросить выбор на значения по умолчанию, `false` — сохранить (смена языка).
 fn load_tool(ui: &AppWindow, tool: Tool, reset: bool) {
     let st = ui.global::<AppState>();
     let lang = st.get_language();
@@ -160,8 +161,6 @@ fn load_tool(ui: &AppWindow, tool: Tool, reset: bool) {
     st.set_options(ModelRc::new(VecModel::from(groups)));
 }
 
-// ---------- настройка обработчиков ----------
-
 pub fn setup(ui: &AppWindow) {
     let cfg = Arc::new(Mutex::new(Config::load()));
     let cancel = Arc::new(AtomicBool::new(false));
@@ -182,7 +181,6 @@ pub fn setup(ui: &AppWindow) {
     load_tool(ui, Tool::VideoAudio, true);
     refresh_summary(ui);
 
-    // --- язык ---
     state.on_language_changed({
         let weak = ui.as_weak();
         let cfg = cfg.clone();
@@ -198,25 +196,21 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- тема ---
     state.on_theme_changed({
         let cfg = cfg.clone();
         move |idx| cfg.lock().unwrap().set_theme(idx)
     });
 
-    // --- акцентный цвет ---
     state.on_accent_changed({
         let cfg = cfg.clone();
         move |idx| cfg.lock().unwrap().set_accent(idx)
     });
 
-    // --- «открывать папку после конвертации» ---
     state.on_open_when_done_changed({
         let cfg = cfg.clone();
         move |on| cfg.lock().unwrap().set_open_when_done(on)
     });
 
-    // --- открыть конвертор ---
     state.on_open_tool({
         let weak = ui.as_weak();
         move |idx| {
@@ -225,7 +219,7 @@ pub fn setup(ui: &AppWindow) {
             if st.get_busy() {
                 return;
             }
-            // Тот же конвертор — оставляем список файлов как был.
+
             if st.get_tool() != idx {
                 with_files(&ui, |m| m.set_vec(Vec::new()));
                 st.set_status("".into());
@@ -238,7 +232,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- выбор пункта в настройках конвертора ---
     state.on_option_selected({
         let weak = ui.as_weak();
         move |group, choice| {
@@ -254,7 +247,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- выбор файлов (можно несколько), фильтр зависит от конвертора ---
     state.on_pick_input({
         let weak = ui.as_weak();
         move || {
@@ -262,7 +254,9 @@ pub fn setup(ui: &AppWindow) {
             let exts = Tool::from_index(ui.global::<AppState>().get_tool()).input_exts();
             let weak = weak.clone();
             thread::spawn(move || {
-                let Some(paths) = rfd::FileDialog::new().add_filter("Files", exts).pick_files()
+                let Some(paths) = rfd::FileDialog::new()
+                    .add_filter("Files", exts)
+                    .pick_files()
                 else {
                     return;
                 };
@@ -288,7 +282,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- убрать один файл из списка ---
     state.on_remove_file({
         let weak = ui.as_weak();
         move |idx| {
@@ -305,7 +298,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- очистить список ---
     state.on_clear_files({
         let weak = ui.as_weak();
         move || {
@@ -322,7 +314,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- выбор папки сохранения ---
     state.on_pick_output_dir({
         let weak = ui.as_weak();
         let cfg = cfg.clone();
@@ -341,7 +332,6 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- открыть папку с результатом ---
     state.on_open_folder({
         let weak = ui.as_weak();
         move || {
@@ -352,13 +342,11 @@ pub fn setup(ui: &AppWindow) {
         }
     });
 
-    // --- отмена ---
     state.on_cancel({
         let cancel = cancel.clone();
         move || cancel.store(true, Ordering::Relaxed)
     });
 
-    // --- конвертация всех файлов по очереди ---
     state.on_convert({
         let weak = ui.as_weak();
         let cancel = cancel.clone();
@@ -370,7 +358,6 @@ pub fn setup(ui: &AppWindow) {
             }
             let lang = st.get_language();
 
-            // Берём только те файлы, которые ещё не готовы.
             let files = st.get_files();
             let todo: Vec<(usize, PathBuf)> = (0..files.row_count())
                 .filter_map(|i| files.row_data(i).map(|f| (i, f)))
@@ -381,7 +368,6 @@ pub fn setup(ui: &AppWindow) {
                 return;
             }
 
-            // Сбрасываем ошибки у тех, что пойдут в работу.
             with_files(&ui, |m| {
                 for (i, _) in &todo {
                     if let Some(mut r) = m.row_data(*i) {
@@ -393,7 +379,6 @@ pub fn setup(ui: &AppWindow) {
                 }
             });
 
-            // План ffmpeg собираем из выбранного конвертора, формата и настроек.
             let tool = Tool::from_index(st.get_tool());
             let opts: Vec<usize> = st
                 .get_options()

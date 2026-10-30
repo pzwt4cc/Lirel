@@ -12,3 +12,4 @@ dirs = "6"
 
 [build-dependencies]
 slint-build = "1"
+winresource = "0.1"

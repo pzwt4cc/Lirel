@@ -4,9 +4,9 @@ use std::{fs, path::PathBuf};
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
-    pub language: String, // "ru" | "en"
-    pub theme: String,    // "system" | "light" | "dark"
-    pub accent: i32,      // индекс цвета 0..=7
+    pub language: String,
+    pub theme: String,
+    pub accent: i32,
     pub output_dir: String,
     pub open_when_done: bool,
 }
@@ -50,7 +50,11 @@ impl Config {
     }
 
     pub fn language_index(&self) -> i32 {
-        if self.language == "en" { 1 } else { 0 }
+        if self.language == "en" {
+            1
+        } else {
+            0
+        }
     }
 
     pub fn theme_index(&self) -> i32 {

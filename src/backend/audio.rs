@@ -1,8 +1,9 @@
+use super::ffmpeg;
 use std::{
     fs,
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Stdio,
     thread,
 };
 
@@ -17,7 +18,6 @@ pub enum AudioFormat {
 }
 
 impl AudioFormat {
-    /// Порядок совпадает со списком в ComboBox (ui/app.slint).
     pub fn from_index(i: usize) -> Self {
         match i {
             0 => Self::Mp3,
@@ -58,23 +58,6 @@ pub enum ConvertError {
     Failed(String),
 }
 
-fn probe_duration(input: &Path) -> Option<f64> {
-    let out = Command::new("ffprobe")
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(input)
-        .output()
-        .ok()?;
-    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
-}
-
-/// Не затираем существующие файлы: song.mp3 -> song (1).mp3 -> ...
 fn unique_output(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     let mut path = dir.join(format!("{stem}.{ext}"));
     let mut n = 1;
@@ -85,8 +68,6 @@ fn unique_output(dir: &Path, stem: &str, ext: &str) -> PathBuf {
     path
 }
 
-/// Конвертирует видео/аудио в аудиоформат. Блокирующая функция:
-/// вызывать из отдельного потока. `on_progress` получает 0.0..=1.0.
 pub fn convert(
     input: &Path,
     out_dir: &Path,
@@ -95,11 +76,14 @@ pub fn convert(
 ) -> Result<PathBuf, ConvertError> {
     fs::create_dir_all(out_dir).map_err(|e| ConvertError::Failed(e.to_string()))?;
 
-    let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+    let stem = input
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
     let output = unique_output(out_dir, stem, format.extension());
-    let duration = probe_duration(input);
+    let duration = ffmpeg::probe_duration(input);
 
-    let mut child = Command::new("ffmpeg")
+    let mut child = ffmpeg::command()
         .args([
             "-hide_banner",
             "-loglevel",
@@ -129,7 +113,6 @@ pub fn convert(
     let stdout = child.stdout.take().expect("stdout piped");
     let mut stderr = child.stderr.take().expect("stderr piped");
 
-    // stderr читаем параллельно, чтобы ffmpeg не завис на заполненном буфере
     let stderr_thread = thread::spawn(move || {
         let mut text = String::new();
         let _ = stderr.read_to_string(&mut text);

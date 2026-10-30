@@ -5,7 +5,7 @@ export struct FileItem {
     path: string,
     ext: string,
     size: string,
-    state: int,       // 0 ждёт, 1 конвертируется, 2 готово, 3 ошибка
+    state: int,
     progress: float,
     note: string,
 }
@@ -60,14 +60,14 @@ export global Tr {
 }
 
 export global AppState {
-    in-out property <int> page: 0;            // 0 главная, 1 настройки, 2 конвертор
-    in-out property <int> tool: 0;            // какой конвертор открыт
+    in-out property <int> page: 0;
+    in-out property <int> tool: 0;
     in-out property <string> tool-title;
     in-out property <[CategoryData]> categories;
     in-out property <[string]> formats;
     in-out property <[OptionGroup]> options;
-    in-out property <int> theme: 0;           // 0 системная, 1 светлая, 2 тёмная
-    in-out property <int> language: 0;        // 0 RU, 1 EN
+    in-out property <int> theme: 0;
+    in-out property <int> language: 0;
     in-out property <int> accent-index: 0;
     in-out property <bool> open-when-done: false;
     in-out property <string> output-dir;
@@ -94,9 +94,8 @@ export global AppState {
     callback open-when-done-changed(bool);
 }
 
-// ---------- Цветовые роли Material 3 (тональная палитра от выбранного цвета) ----------
 export global Theme {
-    // «seed»-цвета: в светлой теме это основной цвет, в тёмной он осветляется
+
     out property <[color]> swatches: [
         #6750a4, #2b6cb0, #00796b, #2e7d32,
         #b26a00, #c0531f, #b0306a, #b3261e,
@@ -127,8 +126,6 @@ export global Theme {
     out property <color> shadow: dark ? #000000.with-alpha(0.5) : #000000.with-alpha(0.2);
 }
 
-// ---------- Базовые компоненты ----------
-
 component Icon inherits Path {
     in property <string> d;
     in property <color> tint: Theme.on-surface;
@@ -143,8 +140,6 @@ component Icon inherits Path {
     stroke-line-join: round;
 }
 
-// «State layer» и волна от места нажатия — как в Material.
-// Кладётся первым ребёнком, TouchArea — последним.
 component StateLayer inherits Rectangle {
     in property <color> tint: Theme.on-surface;
     in property <bool> hovered;
@@ -174,7 +169,6 @@ component SectionTitle inherits Text {
     font-weight: 600;
 }
 
-// Тональный контейнер
 component Card inherits Rectangle {
     background: Theme.surface-container-low;
     border-radius: 12px;
@@ -185,7 +179,6 @@ component Card inherits Rectangle {
     }
 }
 
-// kind: 0 залитая, 1 тональная, 2 с обводкой, 3 текстовая
 component Btn inherits Rectangle {
     in property <string> text;
     in property <int> kind: 1;
@@ -266,7 +259,6 @@ component IconBtn inherits Rectangle {
     }
 }
 
-// M3 Switch: ползунок плавно растёт и переезжает
 component Switch inherits Rectangle {
     in property <bool> checked;
     callback toggled();
@@ -279,7 +271,6 @@ component Switch inherits Rectangle {
     border-color: Theme.outline;
     animate background { duration: 200ms; }
 
-    // волна вокруг ползунка при наведении
     Rectangle {
         width: 40px;
         height: 40px;
@@ -307,7 +298,6 @@ component Switch inherits Rectangle {
     }
 }
 
-// Filter chip: галочка плавно «выезжает» при выборе
 component Chip inherits Rectangle {
     in property <string> text;
     in property <bool> selected: false;
@@ -366,7 +356,6 @@ component Chip inherits Rectangle {
     }
 }
 
-// Чипы одинаковой ширины, которые переносятся на новую строку
 component ChipGrid inherits Rectangle {
     in property <[string]> items;
     in property <int> current;
@@ -390,7 +379,6 @@ component ChipGrid inherits Rectangle {
     }
 }
 
-// Segmented button: выделение плавно переезжает между пунктами
 component Segmented inherits Rectangle {
     in property <[string]> items;
     in property <int> current;
@@ -479,7 +467,6 @@ component Progress inherits Rectangle {
     }
 }
 
-// ---------- Плитка на главной: M3 filled card ----------
 component Tile inherits Rectangle {
     in property <string> src;
     in property <string> dst;
@@ -507,7 +494,6 @@ component Tile inherits Rectangle {
         spacing: 16px;
         opacity: root.available ? 1.0 : 0.38;
 
-        // формат — как M3 assist chip
         VerticalLayout {
             alignment: center;
             Rectangle {
@@ -558,7 +544,6 @@ component Tile inherits Rectangle {
     }
 }
 
-// ---------- Строка файла ----------
 component FileRow inherits Rectangle {
     in property <FileItem> item;
     in property <bool> locked;
@@ -660,7 +645,6 @@ component FileRow inherits Rectangle {
     }
 }
 
-// Страница: плавный «выезд» и появление при смене экрана
 component Page inherits Rectangle {
     in property <int> idx;
     property <bool> active: AppState.page == root.idx;
@@ -674,9 +658,9 @@ component Page inherits Rectangle {
     @children
 }
 
-// ---------- Окно ----------
 export component AppWindow inherits Window {
     title: Tr.app-title;
+    icon: @image-url("../assets/icon.png");
     default-font-family: "Roboto";
     min-width: 720px;
     min-height: 600px;
@@ -692,7 +676,7 @@ export component AppWindow inherits Window {
     init => { Palette.color-scheme = root.wanted-scheme; }
 
     VerticalLayout {
-        // ===== Верхняя панель =====
+
         Rectangle {
             height: 88px;
             HorizontalLayout {
@@ -727,7 +711,7 @@ export component AppWindow inherits Window {
                 VerticalLayout {
                     alignment: center;
                     if AppState.page == 0 : IconBtn {
-                        // иконка «настройки» (ползунки)
+
                         d: "M 4 7 L 12 7 M 18 7 L 20 7 M 4 17 L 6 17 M 12 17 L 20 17 M 12 7 A 3 3 0 1 0 18 7 A 3 3 0 1 0 12 7 M 6 17 A 3 3 0 1 0 12 17 A 3 3 0 1 0 6 17";
                         clicked => { AppState.page = 1; }
                     }
@@ -736,7 +720,7 @@ export component AppWindow inherits Window {
         }
 
         Rectangle {
-            // ===== Главная: разделы Фото / Видео / Аудио =====
+
             Page {
                 idx: 0;
                 ScrollView {
@@ -779,7 +763,6 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // ===== Настройки =====
             Page {
                 idx: 1;
                 ScrollView {
@@ -905,7 +888,6 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // ===== Конвертор =====
             Page {
                 idx: 2;
                 VerticalLayout {
@@ -917,7 +899,6 @@ export component AppWindow inherits Window {
                             spacing: 16px;
                             alignment: start;
 
-                            // --- карточка выбранного конвертора ---
                             Rectangle {
                                 border-radius: 20px;
                                 background: Theme.primary-container;
@@ -978,7 +959,6 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // --- пусто: зона выбора ---
                             if AppState.files.length == 0 : Rectangle {
                                 height: 88px;
                                 border-radius: 12px;
@@ -1034,7 +1014,6 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // --- список файлов ---
                             if AppState.files.length > 0 : VerticalLayout {
                                 spacing: 8px;
                                 for f[i] in AppState.files : FileRow {
@@ -1044,7 +1023,6 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // --- формат и настройки конвертора ---
                             Card {
                                 SectionTitle { text: Tr.format; }
                                 ChipGrid {
@@ -1068,7 +1046,6 @@ export component AppWindow inherits Window {
                                 }
                             }
 
-                            // --- папка ---
                             Card {
                                 SectionTitle { text: Tr.output-dir; }
                                 Field { text: AppState.output-dir; }
@@ -1076,7 +1053,6 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    // --- нижняя панель действий ---
                     Rectangle {
                         background: Theme.surface-container;
                         border-top-left-radius: 20px;

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Lirel
+Exec=lirel
+Icon=lirel
+Categories=AudioVideo;Utility;
+Terminal=false
+StartupWMClass=lirel
