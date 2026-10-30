@@ -1,0 +1,1124 @@
+import { Palette, ScrollView } from "std-widgets.slint";
+
+export struct FileItem {
+    name: string,
+    path: string,
+    ext: string,
+    size: string,
+    state: int,       // 0 ждёт, 1 конвертируется, 2 готово, 3 ошибка
+    progress: float,
+    note: string,
+}
+
+export struct OptionGroup {
+    title: string,
+    choices: [string],
+    selected: int,
+}
+
+export struct TileData {
+    src: string,
+    dst: string,
+    title: string,
+    available: bool,
+    tool: int,
+}
+
+export struct CategoryData {
+    title: string,
+    tiles: [TileData],
+}
+
+export global Tr {
+    in property <string> app-title: "Lirel";
+    in property <string> subtitle;
+    in property <string> settings;
+    in property <string> back;
+    in property <string> soon;
+    in property <string> language;
+    in property <string> theme;
+    in property <string> theme-system;
+    in property <string> theme-light;
+    in property <string> theme-dark;
+    in property <string> accent;
+    in property <string> output-dir;
+    in property <string> choose-folder;
+    in property <string> behavior;
+    in property <string> open-when-done;
+    in property <string> open-when-done-hint;
+    in property <string> choose-files;
+    in property <string> add-more;
+    in property <string> clear-all;
+    in property <string> empty-title;
+    in property <string> empty-hint;
+    in property <string> format;
+    in property <string> convert;
+    in property <string> converting;
+    in property <string> cancel;
+    in property <string> open-folder;
+    in property <string> state-done;
+}
+
+export global AppState {
+    in-out property <int> page: 0;            // 0 главная, 1 настройки, 2 конвертор
+    in-out property <int> tool: 0;            // какой конвертор открыт
+    in-out property <string> tool-title;
+    in-out property <[CategoryData]> categories;
+    in-out property <[string]> formats;
+    in-out property <[OptionGroup]> options;
+    in-out property <int> theme: 0;           // 0 системная, 1 светлая, 2 тёмная
+    in-out property <int> language: 0;        // 0 RU, 1 EN
+    in-out property <int> accent-index: 0;
+    in-out property <bool> open-when-done: false;
+    in-out property <string> output-dir;
+    in-out property <[FileItem]> files;
+    in-out property <string> summary;
+    in-out property <int> format-index: 0;
+    in-out property <bool> busy: false;
+    in-out property <bool> done: false;
+    in-out property <string> status;
+    in-out property <bool> status-error: false;
+
+    callback open-tool(int);
+    callback option-selected(int, int);
+    callback pick-input();
+    callback remove-file(int);
+    callback clear-files();
+    callback pick-output-dir();
+    callback convert();
+    callback cancel();
+    callback open-folder();
+    callback theme-changed(int);
+    callback language-changed(int);
+    callback accent-changed(int);
+    callback open-when-done-changed(bool);
+}
+
+// ---------- Цветовые роли Material 3 (тональная палитра от выбранного цвета) ----------
+export global Theme {
+    // «seed»-цвета: в светлой теме это основной цвет, в тёмной он осветляется
+    out property <[color]> swatches: [
+        #6750a4, #2b6cb0, #00796b, #2e7d32,
+        #b26a00, #c0531f, #b0306a, #b3261e,
+    ];
+    out property <color> seed: swatches[AppState.accent-index];
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <color> surface: dark ? #141218.mix(seed, 0.95) : #fdfbff.mix(seed, 0.965);
+    out property <color> surface-container-low: dark ? #1d1b20.mix(seed, 0.94) : #fdfbff.mix(seed, 0.94);
+    out property <color> surface-container: dark ? #211f26.mix(seed, 0.93) : #fdfbff.mix(seed, 0.915);
+    out property <color> surface-container-high: dark ? #2b2930.mix(seed, 0.92) : #fdfbff.mix(seed, 0.89);
+    out property <color> surface-container-highest: dark ? #36343b.mix(seed, 0.92) : #fdfbff.mix(seed, 0.86);
+
+    out property <color> primary: dark ? seed.mix(#ffffff, 0.42) : seed;
+    out property <color> on-primary: dark ? seed.mix(#000000, 0.3) : #ffffff;
+    out property <color> primary-container: dark ? seed.mix(#000000, 0.58) : #ffffff.mix(seed, 0.76);
+    out property <color> on-primary-container: dark ? #ffffff.mix(seed, 0.8) : seed.mix(#000000, 0.34);
+
+    out property <color> secondary-container: dark ? #2b2930.mix(seed, 0.72) : #ffffff.mix(seed, 0.86);
+    out property <color> on-secondary-container: dark ? #ffffff.mix(seed, 0.82) : seed.mix(#000000, 0.4);
+
+    out property <color> on-surface: dark ? #e6e0e9 : #1d1b20;
+    out property <color> on-surface-variant: dark ? #cac4d0 : #49454f;
+    out property <color> outline: dark ? #938f99 : #79747e;
+    out property <color> outline-variant: dark ? #49454f : #cac4d0;
+
+    out property <color> error: dark ? #f2b8b5 : #b3261e;
+    out property <color> shadow: dark ? #000000.with-alpha(0.5) : #000000.with-alpha(0.2);
+}
+
+// ---------- Базовые компоненты ----------
+
+component Icon inherits Path {
+    in property <string> d;
+    in property <color> tint: Theme.on-surface;
+    width: 24px;
+    height: 24px;
+    viewbox-width: 24;
+    viewbox-height: 24;
+    commands: root.d;
+    stroke: root.tint;
+    stroke-width: 2px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// «State layer» и волна от места нажатия — как в Material.
+// Кладётся первым ребёнком, TouchArea — последним.
+component StateLayer inherits Rectangle {
+    in property <color> tint: Theme.on-surface;
+    in property <bool> hovered;
+    in property <bool> pressed;
+    in property <bool> enabled: true;
+    in property <length> px;
+    in property <length> py;
+
+    clip: true;
+    background: root.enabled && root.hovered ? root.tint.with-alpha(0.08) : transparent;
+    animate background { duration: 150ms; }
+
+    Rectangle {
+        width: root.enabled && root.pressed ? Math.max(root.width, root.height) * 2.6 : 0px;
+        height: self.width;
+        x: root.px - self.width / 2;
+        y: root.py - self.height / 2;
+        border-radius: self.width / 2;
+        background: root.tint.with-alpha(0.14);
+        animate width { duration: root.pressed ? 420ms : 180ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+    }
+}
+
+component SectionTitle inherits Text {
+    color: Theme.primary;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+// Тональный контейнер
+component Card inherits Rectangle {
+    background: Theme.surface-container-low;
+    border-radius: 12px;
+    VerticalLayout {
+        padding: 16px;
+        spacing: 16px;
+        @children
+    }
+}
+
+// kind: 0 залитая, 1 тональная, 2 с обводкой, 3 текстовая
+component Btn inherits Rectangle {
+    in property <string> text;
+    in property <int> kind: 1;
+    in property <bool> enabled: true;
+    in property <length> h: 40px;
+    callback clicked();
+
+    property <color> fg: !root.enabled ? Theme.on-surface.with-alpha(0.38)
+        : root.kind == 0 ? Theme.on-primary
+        : root.kind == 1 ? Theme.on-secondary-container
+        : Theme.primary;
+
+    height: root.h;
+    border-radius: root.h / 2;
+    border-width: root.kind == 2 ? 1px : 0px;
+    border-color: Theme.outline;
+    background: !root.enabled ? Theme.on-surface.with-alpha(root.kind == 2 || root.kind == 3 ? 0.0 : 0.12)
+        : root.kind == 0 ? Theme.primary
+        : root.kind == 1 ? Theme.secondary-container
+        : transparent;
+    animate background { duration: 150ms; }
+
+    StateLayer {
+        border-radius: root.border-radius;
+        tint: root.fg;
+        enabled: root.enabled;
+        hovered: ta.has-hover;
+        pressed: ta.pressed;
+        px: ta.pressed-x;
+        py: ta.pressed-y;
+    }
+
+    HorizontalLayout {
+        padding-left: 24px;
+        padding-right: 24px;
+        Text {
+            text: root.text;
+            font-size: 14px;
+            font-weight: 600;
+            color: root.fg;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
+component IconBtn inherits Rectangle {
+    in property <string> d;
+    in property <color> tint: Theme.on-surface;
+    callback clicked();
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+
+    StateLayer {
+        border-radius: 24px;
+        tint: root.tint;
+        hovered: ta.has-hover;
+        pressed: ta.pressed;
+        px: ta.pressed-x;
+        py: ta.pressed-y;
+    }
+    Icon {
+        d: root.d;
+        tint: root.tint;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+    }
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// M3 Switch: ползунок плавно растёт и переезжает
+component Switch inherits Rectangle {
+    in property <bool> checked;
+    callback toggled();
+
+    width: 52px;
+    height: 32px;
+    border-radius: 16px;
+    background: root.checked ? Theme.primary : Theme.surface-container-highest;
+    border-width: root.checked ? 0px : 2px;
+    border-color: Theme.outline;
+    animate background { duration: 200ms; }
+
+    // волна вокруг ползунка при наведении
+    Rectangle {
+        width: 40px;
+        height: 40px;
+        border-radius: 20px;
+        x: (root.checked ? root.width - 16px : 16px) - self.width / 2;
+        y: (root.height - self.height) / 2;
+        background: (root.checked ? Theme.primary : Theme.on-surface).with-alpha(ta.pressed ? 0.14 : ta.has-hover ? 0.08 : 0.0);
+        animate x { duration: 220ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+        animate background { duration: 150ms; }
+    }
+    Rectangle {
+        width: ta.pressed ? 28px : root.checked ? 24px : 16px;
+        height: self.width;
+        border-radius: self.width / 2;
+        x: (root.checked ? root.width - 16px : 16px) - self.width / 2;
+        y: (root.height - self.height) / 2;
+        background: root.checked ? Theme.on-primary : Theme.outline;
+        animate x, width, height, y { duration: 220ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+        animate background { duration: 200ms; }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.toggled(); }
+    }
+}
+
+// Filter chip: галочка плавно «выезжает» при выборе
+component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected: false;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 36px;
+    border-radius: 8px;
+    border-width: root.selected ? 0px : 1px;
+    border-color: Theme.outline;
+    background: root.selected ? Theme.secondary-container : transparent;
+    opacity: root.enabled ? 1.0 : 0.45;
+    animate background { duration: 180ms; }
+
+    StateLayer {
+        border-radius: 8px;
+        tint: root.selected ? Theme.on-secondary-container : Theme.on-surface;
+        enabled: root.enabled;
+        hovered: ta.has-hover;
+        pressed: ta.pressed;
+        px: ta.pressed-x;
+        py: ta.pressed-y;
+    }
+
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        alignment: center;
+        Rectangle {
+            width: root.selected ? 24px : 0px;
+            clip: true;
+            animate width { duration: 200ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+            Icon {
+                d: "M 5 13 L 10 18 L 19 7";
+                tint: Theme.on-secondary-container;
+                width: 18px;
+                height: 18px;
+                x: 0px;
+                y: (parent.height - self.height) / 2;
+            }
+        }
+        Text {
+            text: root.text;
+            font-size: 14px;
+            font-weight: 500;
+            color: root.selected ? Theme.on-secondary-container : Theme.on-surface-variant;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// Чипы одинаковой ширины, которые переносятся на новую строку
+component ChipGrid inherits Rectangle {
+    in property <[string]> items;
+    in property <int> current;
+    in property <length> cell: 128px;
+    in property <bool> enabled: true;
+    callback picked(int);
+
+    property <length> gap: 8px;
+    property <int> cols: Math.max(1, Math.floor((self.width + gap) / (cell + gap)));
+    property <int> rows: Math.ceil(items.length / cols);
+    height: rows * 36px + Math.max(0, rows - 1) * gap;
+
+    for item[i] in root.items : Chip {
+        x: Math.mod(i, root.cols) * (root.cell + root.gap);
+        y: Math.floor(i / root.cols) * (36px + root.gap);
+        width: root.cell;
+        text: item;
+        selected: root.current == i;
+        enabled: root.enabled;
+        clicked => { root.picked(i); }
+    }
+}
+
+// Segmented button: выделение плавно переезжает между пунктами
+component Segmented inherits Rectangle {
+    in property <[string]> items;
+    in property <int> current;
+    callback selected(int);
+
+    height: 40px;
+    width: root.items.length * 124px;
+    border-radius: 20px;
+    border-width: 1px;
+    border-color: Theme.outline;
+    clip: true;
+
+    Rectangle {
+        x: root.current * (root.width / root.items.length);
+        width: root.width / root.items.length;
+        height: root.height;
+        background: Theme.secondary-container;
+        animate x { duration: 280ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+    }
+
+    HorizontalLayout {
+        for item[i] in root.items : Rectangle {
+            horizontal-stretch: 1;
+
+            StateLayer {
+                tint: Theme.on-surface;
+                hovered: seg-ta.has-hover;
+                pressed: seg-ta.pressed;
+                px: seg-ta.pressed-x;
+                py: seg-ta.pressed-y;
+            }
+            if i > 0 && root.current != i && root.current != i - 1 : Rectangle {
+                x: 0px;
+                width: 1px;
+                background: Theme.outline;
+            }
+            Text {
+                text: item;
+                font-size: 14px;
+                font-weight: 600;
+                color: root.current == i ? Theme.on-secondary-container : Theme.on-surface;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                animate color { duration: 200ms; }
+            }
+            seg-ta := TouchArea {
+                mouse-cursor: MouseCursor.pointer;
+                clicked => { root.selected(i); }
+            }
+        }
+    }
+}
+
+component Field inherits Rectangle {
+    in property <string> text;
+    in property <string> placeholder;
+    height: 52px;
+    border-radius: 14px;
+    background: Theme.surface-container-highest;
+
+    Text {
+        x: 16px;
+        width: parent.width - 32px;
+        height: parent.height;
+        text: root.text == "" ? root.placeholder : root.text;
+        color: root.text == "" ? Theme.on-surface-variant : Theme.on-surface;
+        font-size: 14px;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+component Progress inherits Rectangle {
+    in property <float> progress;
+    height: 6px;
+    border-radius: 3px;
+    background: Theme.secondary-container;
+
+    Rectangle {
+        x: 0px;
+        width: parent.width * Math.clamp(root.progress, 0, 1);
+        height: parent.height;
+        border-radius: 3px;
+        background: Theme.primary;
+        animate width { duration: 300ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+    }
+}
+
+// ---------- Плитка на главной: M3 filled card ----------
+component Tile inherits Rectangle {
+    in property <string> src;
+    in property <string> dst;
+    in property <string> title;
+    in property <bool> available: true;
+    callback clicked();
+
+    height: 80px;
+    border-radius: 12px;
+    clip: true;
+    background: root.available ? Theme.surface-container-highest : Theme.surface-container-low;
+
+    StateLayer {
+        tint: Theme.on-surface;
+        enabled: root.available;
+        hovered: ta.has-hover;
+        pressed: ta.pressed;
+        px: ta.pressed-x;
+        py: ta.pressed-y;
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 16px;
+        opacity: root.available ? 1.0 : 0.38;
+
+        // формат — как M3 assist chip
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 112px;
+                height: 32px;
+                border-radius: 8px;
+                background: Theme.primary-container;
+                Text {
+                    text: root.src + " → " + root.dst;
+                    font-size: 12px;
+                    font-weight: 600;
+                    color: Theme.on-primary-container;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Text {
+            text: root.title;
+            font-size: 16px;
+            font-weight: 500;
+            color: Theme.on-surface;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+
+        VerticalLayout {
+            alignment: center;
+            if root.available : Icon {
+                d: "M 5 12 L 19 12 M 13 6 L 19 12 L 13 18";
+                tint: Theme.on-surface-variant;
+            }
+            if !root.available : Text {
+                text: Tr.soon;
+                font-size: 12px;
+                font-weight: 500;
+                color: Theme.on-surface-variant;
+            }
+        }
+    }
+
+    ta := TouchArea {
+        enabled: root.available;
+        mouse-cursor: root.available ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// ---------- Строка файла ----------
+component FileRow inherits Rectangle {
+    in property <FileItem> item;
+    in property <bool> locked;
+    callback remove();
+
+    height: 64px;
+    border-radius: 12px;
+    background: Theme.surface-container-high;
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 8px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: 14px;
+
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 44px;
+                height: 44px;
+                border-radius: 22px;
+                background: root.item.state == 3 ? Theme.error.with-alpha(0.18)
+                    : root.item.state == 2 ? Theme.primary
+                    : Theme.primary-container;
+                animate background { duration: 250ms; }
+
+                if root.item.state == 2 : Icon {
+                    d: "M 5 13 L 10 18 L 19 7";
+                    tint: Theme.on-primary;
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                }
+                if root.item.state != 2 : Text {
+                    text: root.item.ext;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: root.item.state == 3 ? Theme.error : Theme.on-primary-container;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 6px;
+
+            Text {
+                text: root.item.name;
+                font-size: 15px;
+                font-weight: 500;
+                color: Theme.on-surface;
+                overflow: elide;
+            }
+            if root.item.state == 0 : Text {
+                text: root.item.size;
+                font-size: 13px;
+                color: Theme.on-surface-variant;
+            }
+            if root.item.state == 1 : HorizontalLayout {
+                spacing: 10px;
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 1;
+                    Progress { progress: root.item.progress; }
+                }
+                Text {
+                    text: Math.round(root.item.progress * 100) + "%";
+                    font-size: 13px;
+                    color: Theme.on-surface-variant;
+                }
+            }
+            if root.item.state == 2 : Text {
+                text: Tr.state-done + " · " + root.item.size;
+                font-size: 13px;
+                font-weight: 600;
+                color: Theme.primary;
+            }
+            if root.item.state == 3 : Text {
+                text: root.item.note;
+                font-size: 13px;
+                color: Theme.error;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            if !root.locked : IconBtn {
+                d: "M 6 6 L 18 18 M 18 6 L 6 18";
+                tint: Theme.on-surface-variant;
+                width: 40px;
+                height: 40px;
+                clicked => { root.remove(); }
+            }
+        }
+    }
+}
+
+// Страница: плавный «выезд» и появление при смене экрана
+component Page inherits Rectangle {
+    in property <int> idx;
+    property <bool> active: AppState.page == root.idx;
+
+    x: root.active ? 0px : (AppState.page > root.idx ? -48px : 48px);
+    opacity: root.active ? 1.0 : 0.0;
+    visible: root.opacity > 0.01;
+    animate x { duration: 320ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+    animate opacity { duration: 240ms; }
+
+    @children
+}
+
+// ---------- Окно ----------
+export component AppWindow inherits Window {
+    title: Tr.app-title;
+    default-font-family: "Roboto";
+    min-width: 720px;
+    min-height: 600px;
+    preferred-width: 900px;
+    preferred-height: 720px;
+    background: Theme.surface;
+
+    property <ColorScheme> wanted-scheme:
+        AppState.theme == 1 ? ColorScheme.light
+        : AppState.theme == 2 ? ColorScheme.dark
+        : ColorScheme.unknown;
+    changed wanted-scheme => { Palette.color-scheme = root.wanted-scheme; }
+    init => { Palette.color-scheme = root.wanted-scheme; }
+
+    VerticalLayout {
+        // ===== Верхняя панель =====
+        Rectangle {
+            height: 88px;
+            HorizontalLayout {
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 8px;
+
+                VerticalLayout {
+                    alignment: center;
+                    width: AppState.page != 0 ? 48px : 0px;
+                    animate width { duration: 280ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+                    if AppState.page != 0 : IconBtn {
+                        d: "M 20 12 L 4 12 M 11 5 L 4 12 L 11 19";
+                        clicked => {
+                            if (!AppState.busy) {
+                                AppState.page = 0;
+                            }
+                        }
+                    }
+                }
+                Text {
+                    text: AppState.page == 0 ? Tr.app-title
+                        : AppState.page == 1 ? Tr.settings
+                        : AppState.tool-title;
+                    color: Theme.on-surface;
+                    font-size: 30px;
+                    font-weight: 500;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    if AppState.page == 0 : IconBtn {
+                        // иконка «настройки» (ползунки)
+                        d: "M 4 7 L 12 7 M 18 7 L 20 7 M 4 17 L 6 17 M 12 17 L 20 17 M 12 7 A 3 3 0 1 0 18 7 A 3 3 0 1 0 12 7 M 6 17 A 3 3 0 1 0 12 17 A 3 3 0 1 0 6 17";
+                        clicked => { AppState.page = 1; }
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            // ===== Главная: разделы Фото / Видео / Аудио =====
+            Page {
+                idx: 0;
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        padding-top: 0px;
+                        padding-bottom: 40px;
+                        spacing: 28px;
+                        alignment: start;
+
+                        Text {
+                            text: Tr.subtitle;
+                            color: Theme.on-surface-variant;
+                            font-size: 15px;
+                        }
+
+                        for cat in AppState.categories : VerticalLayout {
+                            spacing: 14px;
+
+                            Text {
+                                text: cat.title;
+                                font-size: 20px;
+                                font-weight: 600;
+                                color: Theme.on-surface;
+                            }
+
+                            VerticalLayout {
+                                spacing: 8px;
+                                for tile in cat.tiles : Tile {
+                                    src: tile.src;
+                                    dst: tile.dst;
+                                    title: tile.title;
+                                    available: tile.available;
+                                    clicked => { AppState.open-tool(tile.tool); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== Настройки =====
+            Page {
+                idx: 1;
+                ScrollView {
+                    VerticalLayout {
+                        padding-left: 24px;
+                        padding-right: 24px;
+                        padding-bottom: 40px;
+                        spacing: 16px;
+                        alignment: start;
+
+                        Card {
+                            SectionTitle { text: Tr.language; }
+                            HorizontalLayout {
+                                alignment: start;
+                                Segmented {
+                                    items: ["Русский", "English"];
+                                    current: AppState.language;
+                                    selected(i) => { AppState.language = i; AppState.language-changed(i); }
+                                }
+                            }
+
+                            SectionTitle { text: Tr.theme; }
+                            HorizontalLayout {
+                                alignment: start;
+                                Segmented {
+                                    items: [Tr.theme-system, Tr.theme-light, Tr.theme-dark];
+                                    current: AppState.theme;
+                                    selected(i) => { AppState.theme = i; AppState.theme-changed(i); }
+                                }
+                            }
+
+                            SectionTitle { text: Tr.accent; }
+                            HorizontalLayout {
+                                spacing: 12px;
+                                alignment: start;
+                                for c[i] in Theme.swatches : Rectangle {
+                                    width: 44px;
+                                    height: 44px;
+                                    border-radius: 22px;
+                                    background: c;
+                                    border-width: 3px;
+                                    border-color: AppState.accent-index == i ? Theme.on-surface : transparent;
+                                    animate border-color { duration: 200ms; }
+
+                                    StateLayer {
+                                        border-radius: 22px;
+                                        tint: #ffffff;
+                                        hovered: sw-ta.has-hover;
+                                        pressed: sw-ta.pressed;
+                                        px: sw-ta.pressed-x;
+                                        py: sw-ta.pressed-y;
+                                    }
+                                    Icon {
+                                        d: "M 5 13 L 10 18 L 19 7";
+                                        tint: #ffffff;
+                                        width: AppState.accent-index == i ? 22px : 0px;
+                                        height: self.width;
+                                        x: (parent.width - self.width) / 2;
+                                        y: (parent.height - self.height) / 2;
+                                        opacity: AppState.accent-index == i ? 1.0 : 0.0;
+                                        animate width, opacity { duration: 200ms; easing: cubic-bezier(0.2, 0, 0, 1); }
+                                    }
+                                    sw-ta := TouchArea {
+                                        mouse-cursor: MouseCursor.pointer;
+                                        clicked => { AppState.accent-index = i; AppState.accent-changed(i); }
+                                    }
+                                }
+                            }
+                        }
+
+                        Card {
+                            SectionTitle { text: Tr.output-dir; }
+                            HorizontalLayout {
+                                spacing: 12px;
+                                Field {
+                                    text: AppState.output-dir;
+                                    horizontal-stretch: 1;
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Btn {
+                                        text: Tr.choose-folder;
+                                        kind: 1;
+                                        clicked => { AppState.pick-output-dir(); }
+                                    }
+                                }
+                            }
+                        }
+
+                        Card {
+                            SectionTitle { text: Tr.behavior; }
+                            HorizontalLayout {
+                                spacing: 16px;
+                                VerticalLayout {
+                                    horizontal-stretch: 1;
+                                    alignment: center;
+                                    spacing: 2px;
+                                    Text {
+                                        text: Tr.open-when-done;
+                                        font-size: 16px;
+                                        color: Theme.on-surface;
+                                    }
+                                    Text {
+                                        text: Tr.open-when-done-hint;
+                                        font-size: 13px;
+                                        color: Theme.on-surface-variant;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    Switch {
+                                        checked: AppState.open-when-done;
+                                        toggled => {
+                                            AppState.open-when-done = !AppState.open-when-done;
+                                            AppState.open-when-done-changed(AppState.open-when-done);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== Конвертор =====
+            Page {
+                idx: 2;
+                VerticalLayout {
+                    ScrollView {
+                        VerticalLayout {
+                            padding-left: 24px;
+                            padding-right: 24px;
+                            padding-bottom: 24px;
+                            spacing: 16px;
+                            alignment: start;
+
+                            // --- карточка выбранного конвертора ---
+                            Rectangle {
+                                border-radius: 20px;
+                                background: Theme.primary-container;
+
+                                VerticalLayout {
+                                    padding: 20px;
+                                    spacing: 12px;
+
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        alignment: start;
+                                        Text {
+                                            text: AppState.files.length > 0 ? AppState.files[0].ext : "···";
+                                            font-size: 28px;
+                                            font-weight: 600;
+                                            color: Theme.on-primary-container;
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            text: "→";
+                                            font-size: 28px;
+                                            font-weight: 500;
+                                            color: Theme.on-primary-container.with-alpha(0.55);
+                                            vertical-alignment: center;
+                                        }
+                                        Text {
+                                            text: AppState.formats[AppState.format-index];
+                                            font-size: 28px;
+                                            font-weight: 600;
+                                            color: Theme.on-primary-container;
+                                            vertical-alignment: center;
+                                        }
+                                    }
+
+                                    Text {
+                                        text: AppState.summary;
+                                        font-size: 14px;
+                                        color: Theme.on-primary-container.with-alpha(0.8);
+                                        overflow: elide;
+                                    }
+
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        alignment: start;
+                                        Btn {
+                                            kind: 0;
+                                            text: AppState.files.length > 0 ? Tr.add-more : Tr.choose-files;
+                                            enabled: !AppState.busy;
+                                            clicked => { AppState.pick-input(); }
+                                        }
+                                        if AppState.files.length > 0 : Btn {
+                                            kind: 3;
+                                            text: Tr.clear-all;
+                                            enabled: !AppState.busy;
+                                            clicked => { AppState.clear-files(); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // --- пусто: зона выбора ---
+                            if AppState.files.length == 0 : Rectangle {
+                                height: 88px;
+                                border-radius: 12px;
+                                border-width: 1px;
+                                border-color: Theme.outline-variant;
+                                clip: true;
+
+                                StateLayer {
+                                    tint: Theme.primary;
+                                    hovered: empty-ta.has-hover;
+                                    pressed: empty-ta.pressed;
+                                    px: empty-ta.pressed-x;
+                                    py: empty-ta.pressed-y;
+                                }
+                                HorizontalLayout {
+                                    alignment: center;
+                                    spacing: 16px;
+                                    padding: 16px;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Rectangle {
+                                            width: 40px;
+                                            height: 40px;
+                                            border-radius: 12px;
+                                            background: Theme.primary-container;
+                                            Icon {
+                                                d: "M 12 5 L 12 19 M 5 12 L 19 12";
+                                                tint: Theme.on-primary-container;
+                                                x: (parent.width - self.width) / 2;
+                                                y: (parent.height - self.height) / 2;
+                                            }
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        alignment: center;
+                                        spacing: 2px;
+                                        Text {
+                                            text: Tr.empty-title;
+                                            font-size: 17px;
+                                            font-weight: 500;
+                                            color: Theme.on-surface;
+                                        }
+                                        Text {
+                                            text: Tr.empty-hint;
+                                            font-size: 13px;
+                                            color: Theme.on-surface-variant;
+                                        }
+                                    }
+                                }
+                                empty-ta := TouchArea {
+                                    mouse-cursor: MouseCursor.pointer;
+                                    clicked => { AppState.pick-input(); }
+                                }
+                            }
+
+                            // --- список файлов ---
+                            if AppState.files.length > 0 : VerticalLayout {
+                                spacing: 8px;
+                                for f[i] in AppState.files : FileRow {
+                                    item: f;
+                                    locked: AppState.busy;
+                                    remove => { AppState.remove-file(i); }
+                                }
+                            }
+
+                            // --- формат и настройки конвертора ---
+                            Card {
+                                SectionTitle { text: Tr.format; }
+                                ChipGrid {
+                                    items: AppState.formats;
+                                    current: AppState.format-index;
+                                    cell: 128px;
+                                    enabled: !AppState.busy;
+                                    picked(i) => { AppState.format-index = i; }
+                                }
+
+                                for g[gi] in AppState.options : VerticalLayout {
+                                    spacing: 10px;
+                                    SectionTitle { text: g.title; }
+                                    ChipGrid {
+                                        items: g.choices;
+                                        current: g.selected;
+                                        cell: 160px;
+                                        enabled: !AppState.busy;
+                                        picked(ci) => { AppState.option-selected(gi, ci); }
+                                    }
+                                }
+                            }
+
+                            // --- папка ---
+                            Card {
+                                SectionTitle { text: Tr.output-dir; }
+                                Field { text: AppState.output-dir; }
+                            }
+                        }
+                    }
+
+                    // --- нижняя панель действий ---
+                    Rectangle {
+                        background: Theme.surface-container;
+                        border-top-left-radius: 20px;
+                        border-top-right-radius: 20px;
+
+                        HorizontalLayout {
+                            padding-left: 24px;
+                            padding-right: 24px;
+                            padding-top: 12px;
+                            padding-bottom: 12px;
+                            spacing: 12px;
+
+                            Text {
+                                text: AppState.status;
+                                color: AppState.status-error ? Theme.error : Theme.on-surface-variant;
+                                font-size: 13px;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            if AppState.busy : Btn {
+                                kind: 2;
+                                text: Tr.cancel;
+                                clicked => { AppState.cancel(); }
+                            }
+                            if AppState.done && !AppState.busy : Btn {
+                                kind: 1;
+                                text: Tr.open-folder;
+                                clicked => { AppState.open-folder(); }
+                            }
+                            Btn {
+                                kind: 0;
+                                text: AppState.busy ? Tr.converting
+                                    : AppState.files.length > 1 ? Tr.convert + " (" + AppState.files.length + ")"
+                                    : Tr.convert;
+                                enabled: !AppState.busy && AppState.files.length > 0;
+                                clicked => { AppState.convert(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
