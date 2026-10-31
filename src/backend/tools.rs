@@ -25,6 +25,7 @@ pub enum Tool {
     Gif = 4,
     Compress = 5,
     VideoPhoto = 6,
+    Animation = 7,
 }
 
 const VIDEO_EXT: &[&str] = &[
@@ -39,7 +40,7 @@ const ALL_MEDIA_EXT: &[&str] = &[
 ];
 const PHOTO_EXT: &[&str] = &[
     "jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp", "tif", "tiff", "ico", "tga", "ppm",
-    "pgm", "pcx", "svg", "psd", "heic", "heif",
+    "pgm", "pcx", "svg", "psd", "heic", "heif", "jfif",
 ];
 
 const AUDIO_FORMATS: &[&str] = &["MP3", "WAV", "FLAC", "OGG", "AAC", "OPUS"];
@@ -49,6 +50,8 @@ const PHOTO_FORMATS: &[&str] = &[
 const FRAME_FORMATS: &[&str] = &["JPG", "PNG", "WEBP"];
 const VIDEO_FORMATS: &[&str] = &["MP4", "MKV", "WEBM", "MOV", "AVI"];
 const GIF_FORMATS: &[&str] = &["GIF", "WEBP"];
+const ANIM_EXT: &[&str] = &["gif", "apng", "png"];
+const ANIM_FORMATS: &[&str] = &["MP4", "WEBM", "GIF", "APNG"];
 const COMPRESS_FORMATS: &[&str] = &["MP4 (H.264)", "MP4 (H.265)", "WEBM"];
 
 const KBPS: [u32; 5] = [96, 128, 192, 256, 320];
@@ -180,6 +183,7 @@ const AUDIO_OPTS: &[Opt] = &[O_BITRATE, O_RATE, O_CHANNELS];
 const PHOTO_OPTS: &[Opt] = &[O_PHOTO_QUALITY, O_PHOTO_SIZE];
 const VIDEO_OPTS: &[Opt] = &[O_VIDEO_QUALITY, O_RESOLUTION, O_SOUND];
 const GIF_OPTS: &[Opt] = &[O_GIF_FPS, O_GIF_WIDTH, O_GIF_LEN];
+const ANIM_OPTS: &[Opt] = &[O_VIDEO_QUALITY];
 const COMPRESS_OPTS: &[Opt] = &[O_COMPRESS_LEVEL, O_RESOLUTION, O_SOUND];
 const FRAME_OPTS: &[Opt] = &[O_FRAME_AT, O_PHOTO_QUALITY];
 
@@ -194,7 +198,7 @@ fn pick(o: &[usize], i: usize, default: usize) -> usize {
 }
 
 impl Tool {
-    pub const ALL: [Tool; 7] = [
+    pub const ALL: [Tool; 8] = [
         Tool::VideoAudio,
         Tool::Photo,
         Tool::Video,
@@ -202,6 +206,7 @@ impl Tool {
         Tool::Gif,
         Tool::Compress,
         Tool::VideoPhoto,
+        Tool::Animation,
     ];
 
     pub fn from_index(i: i32) -> Tool {
@@ -214,7 +219,7 @@ impl Tool {
     pub fn category(self) -> usize {
         match self {
             Tool::Photo | Tool::VideoPhoto => 0,
-            Tool::VideoAudio | Tool::Video | Tool::Gif | Tool::Compress => 1,
+            Tool::VideoAudio | Tool::Video | Tool::Gif | Tool::Compress | Tool::Animation => 1,
             Tool::Audio => 2,
         }
     }
@@ -228,6 +233,7 @@ impl Tool {
             Tool::Gif => ("Видео в GIF", "Video to GIF"),
             Tool::Compress => ("Сжатие видео", "Compress video"),
             Tool::VideoPhoto => ("Кадр из видео", "Video frame"),
+            Tool::Animation => ("GIF и анимация", "GIF & animation"),
         }
     }
 
@@ -240,6 +246,7 @@ impl Tool {
             Tool::Gif => ("MP4", "GIF"),
             Tool::Compress => ("MP4", "MP4 ↓"),
             Tool::VideoPhoto => ("MP4", "JPG"),
+            Tool::Animation => ("GIF", "MP4"),
         }
     }
 
@@ -251,6 +258,7 @@ impl Tool {
             Tool::Gif => GIF_FORMATS,
             Tool::Compress => COMPRESS_FORMATS,
             Tool::VideoPhoto => FRAME_FORMATS,
+            Tool::Animation => ANIM_FORMATS,
         }
     }
 
@@ -263,6 +271,7 @@ impl Tool {
             Tool::Gif => GIF_OPTS,
             Tool::Compress => COMPRESS_OPTS,
             Tool::VideoPhoto => FRAME_OPTS,
+            Tool::Animation => ANIM_OPTS,
         }
     }
 
@@ -271,6 +280,7 @@ impl Tool {
             Tool::VideoAudio => ALL_MEDIA_EXT,
             Tool::Audio => AUDIO_EXT,
             Tool::Photo => PHOTO_EXT,
+            Tool::Animation => ANIM_EXT,
             Tool::Video | Tool::Gif | Tool::Compress | Tool::VideoPhoto => VIDEO_EXT,
         }
     }
@@ -284,6 +294,7 @@ impl Tool {
             Tool::Gif => gif_plan(fmt, pick(o, 0, 1), pick(o, 1, 1), pick(o, 2, 1)),
             Tool::Compress => compress_plan(fmt, pick(o, 0, 1), pick(o, 1, 0), pick(o, 2, 0) == 1),
             Tool::VideoPhoto => frame_plan(fmt, pick(o, 0, 1), pick(o, 1, 1)),
+            Tool::Animation => anim_plan(fmt, pick(o, 0, 0)),
         }
     }
 }
@@ -587,6 +598,48 @@ fn compress_plan(fmt: usize, level: usize, res: usize, mute: bool) -> Plan {
     if mute {
         args.push("-an".into());
     }
+    Plan {
+        ext,
+        args,
+        limit: None,
+        needs_frame: false,
+    }
+}
+
+fn anim_plan(fmt: usize, quality: usize) -> Plan {
+    let q = quality.min(2);
+    let even = "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p";
+    let mut args = s(&["-an"]);
+    let ext = match fmt {
+        0 => {
+            let crf = ["20", "24", "29"][q];
+            args.extend(["-vf".to_string(), even.to_string()]);
+            args.extend(s(&[
+                "-c:v", "libx264", "-preset", "medium", "-crf", crf, "-movflags", "+faststart",
+            ]));
+            "mp4"
+        }
+        1 => {
+            let crf = ["30", "36", "42"][q];
+            args.extend(["-vf".to_string(), even.to_string()]);
+            args.extend(s(&[
+                "-c:v", "libvpx-vp9", "-crf", crf, "-b:v", "0", "-row-mt", "1", "-cpu-used", "4",
+            ]));
+            "webm"
+        }
+        2 => {
+            args.extend([
+                "-vf".to_string(),
+                "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse".to_string(),
+            ]);
+            args.extend(s(&["-loop", "0"]));
+            "gif"
+        }
+        _ => {
+            args.extend(s(&["-c:v", "apng", "-plays", "0", "-f", "apng"]));
+            "apng"
+        }
+    };
     Plan {
         ext,
         args,
